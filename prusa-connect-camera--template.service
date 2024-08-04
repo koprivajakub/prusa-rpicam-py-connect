@@ -1,0 +1,8 @@
+[Unit]
+Description=Prusa Connect RPi Camera capture
+
+[Service]
+ExecStart=$shell_script_path
+
+[Install]
+WantedBy=multi-user.target
