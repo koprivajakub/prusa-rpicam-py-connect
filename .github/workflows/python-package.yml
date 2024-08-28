@@ -1,0 +1,100 @@
+name: Create executable package
+
+permissions:
+  contents: write
+
+on:
+ workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch used to checkout the code'
+        required: false
+        default: "master"
+        type: string
+      release_version:
+        description: 'Semver release version'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout `${{ github.event.inputs.branch }}`
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch }}
+
+    - name: Create `dist/` directory
+      run: mkdir dist/
+
+    - name: Create build on Raspberry Pi ARM platform
+      uses: pguyot/arm-runner-action@v2
+      with:
+        #bind_mount_repository: true
+        copy_artifact_path: dist
+        commands: |
+          apt install -y python3-pip
+          pip install pyinstaller --break-system-packages
+          pyinstaller ./src/build.spec
+
+    - name: Print `dist` directory content
+      run: ls -al dist/
+
+    - name: Upload `dist/install-camera` artifact
+      id: upload_artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        path: dist/install-camera
+
+    - name: Print Download URL
+      run: echo "${{ steps.upload_artifacts.outputs.artifact-url }}"
+
+    - name: Create current date time
+      id: date_time
+      run: echo "date_time_string=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_OUTPUT
+
+    - name: Create releasable file names
+      id: file_names
+      if: github.event.inputs.release_version != ''
+      run: |
+        echo "versioned_release_file_path=dist/install-camera_${{ github.event.inputs.release_version }}" >> $GITHUB_OUTPUT
+        echo "file_path=dist/install-camera" >> $GITHUB_OUTPUT
+
+    - name: Create versioned file
+      if: github.event.inputs.release_version != ''
+      run: |
+        cp ${{ steps.file_names.outputs.file_path }} ${{ steps.file_names.outputs.versioned_release_file_path }}
+
+    - name: Create Release
+      if: github.event.inputs.release_version != ''
+      id: create_release
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: |
+          ${{ steps.file_names.outputs.file_path }}
+        tag_name: ${{ github.event.inputs.release_version }}
+        name: Release `${{ github.event.inputs.release_version }}`
+        draft: true
+        prerelease: false
+        body: Automatically created release from commit `${{ github.sha }}` created at `${{ steps.date_time.outputs.date_time_string }}`
+
+    - name: Create Latest Release
+      if: github.event.inputs.release_version != ''
+      id: create_latest_release
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: |
+          ${{ steps.file_names.outputs.file_path }}
+        tag_name: latest
+        name: Latest Release (`${{ github.event.inputs.release_version }}`)
+        draft: false
+        prerelease: false
+        body: Automatically updated latest release initiated from `${{ github.event.inputs.release_version }}` from commit `${{ github.sha }}` created at `${{ steps.date_time.outputs.date_time_string }}`
+        make_latest: true
