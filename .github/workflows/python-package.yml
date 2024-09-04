@@ -80,9 +80,10 @@ jobs:
           ${{ steps.file_names.outputs.versioned_release_file_path }}
         tag_name: ${{ github.event.inputs.release_version }}
         name: Release ${{ github.event.inputs.release_version }}
-        draft: true
+        draft: false
         prerelease: false
         body: Automatically created release from commit `${{ github.sha }}` created at `${{ steps.date_time.outputs.date_time_string }}`
+        make_latest: true
 
     - name: Create Latest Release
       if: github.event.inputs.release_version != ''
@@ -98,4 +99,3 @@ jobs:
         draft: false
         prerelease: false
         body: Automatically updated latest release initiated from `${{ github.event.inputs.release_version }}` from commit `${{ github.sha }}` created at `${{ steps.date_time.outputs.date_time_string }}`
-        make_latest: true
