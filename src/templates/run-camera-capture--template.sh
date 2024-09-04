@@ -69,7 +69,7 @@ while true; do
     fi
     if [ $$errored == "false" ]; then
         errored="true"
-        echo "rpicam-still returned an error, retrying after 60s... You might want to check log files: '$$logfiles'. You might want to search for a solution on GitHub https://github.com/koprivajakub/prusa-rpicam-py-connect/issues (feel free to create an Issue if you aren't able to find the answer for your problem). Also you might want to check comments at https://www.printables.com/en/model/989624 and seek help there."
+        echo "Image upload script encountered an error, retrying after 60s... You might want to check log files: '$$logfiles'. You might want to search for a solution on GitHub https://github.com/koprivajakub/prusa-rpicam-py-connect/issues (feel free to create an Issue if you aren't able to find the answer for your problem). Also you might want to check comments at https://www.printables.com/en/model/989624 and seek help there."
     fi
     sleep 60
 done
