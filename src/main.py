@@ -9,6 +9,7 @@ import json
 import uuid
 from string import Template
 
+
 def print_success() -> None:
     print('')
     print('')
