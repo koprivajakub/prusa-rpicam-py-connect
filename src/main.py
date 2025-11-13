@@ -9,7 +9,6 @@ import json
 import uuid
 from string import Template
 
-
 def print_success() -> None:
     print('')
     print('')
@@ -100,32 +99,45 @@ def send_image(cam_rotation: int, cam_fingerprint: str, cam_token: str) -> None:
             ["ffmpeg", "-y", "-i", "cam_snapshot.jpg", "-vf", f'rotate={cam_rotation}*PI/180', "cam_snapshot.jpg"],
             capture_output=True)
 
-    curl_send_image_output = subprocess.run(['curl', '-X', 'PUT', 'https://connect.prusa3d.com/c/snapshot',
-                                             '-H', 'accept: */*',
-                                             '-H', 'content-type: image/jpg',
-                                             '-H', f'fingerprint: {cam_fingerprint}',
-                                             '-H', f'token: {cam_token}',
-                                             '--data-binary', '@cam_snapshot.jpg',
-                                             '--no-progress-meter',
-                                             '--compressed'], capture_output=True)
+    DELIM = '---STATUS---'
+    curl_send_image_output = subprocess.run(
+        [
+            'curl',
+            '-X', 'PUT', 'https://connect.prusa3d.com/c/snapshot',
+            '-H', 'accept: */*',
+            '-H', 'content-type: image/jpg',
+            '-H', f'fingerprint: {cam_fingerprint}',
+            '-H', f'token: {cam_token}',
+            '--data-binary', '@cam_snapshot.jpg',
+            '--no-progress-meter',
+            '--compressed',
+            '-w', f'{DELIM}%{{http_code}}',
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    stdout = curl_send_image_output.stdout
+    if DELIM in stdout:
+        body, status_str = stdout.split(DELIM, 1)
+        body = body.rstrip('\n\r')
+        http_code = int(status_str.strip())
+    else:
+        body = stdout
+        http_code = None  # or handle as error
+
     if curl_send_image_output.returncode != 0:
         print("")
-        print(f'{curl_send_image_output.stdout.decode(sys.getfilesystemencoding())}')
-        print(f'{curl_send_image_output.stderr.decode(sys.getfilesystemencoding())}')
+        print(f'{stdout}')
+        print(f'{curl_send_image_output.stderr}')
         print("")
         print("Image wasn't sent, check the error above.")
         exit(512)
-    raw_response = curl_send_image_output.stdout.decode(sys.getfilesystemencoding())
-    data = json.loads(raw_response)
-    if 'status_code' in data:
-        status_code = data['status_code']
-        if 200 <= status_code < 300:
-            print("Image sent successfully...")
-            return
+    if http_code is not None and 200 <= http_code < 300:
+        print("Image sent successfully.")
     else:
-        print(data)
-        print('')
         print('There was an error sending the image. See details above.')
+    print(f'HTTP status code: {http_code}, Response body:\n------RESPONSE BODY STARTS------\n{body}\n------RESPONSE BODY ENDS------\n')
 
 
 def create_autorun_script(camera_token: str, camera_fingerprint: str, camera_rotation: int) -> str:
@@ -285,8 +297,24 @@ if __name__ == '__main__':
             "Are you ready to test the connection? (Note: This will stop the automatic screenshot service if there is "
             "any already from previous installations.)"):
         try:
-            subprocess.run(['sudo', 'systemctl', 'stop', service_file_name])
+            stop_service_result = subprocess.run(
+                ['sudo', 'systemctl', 'stop', service_file_name],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if stop_service_result.returncode != 0:
+                if "not loaded" in stop_service_result.stderr or "":
+                    print(f"Service '{service_file_name}' is not loaded. No need to stop it.")
+                else:
+                    raise print(f"Error stopping the service '{service_file_name}': {stop_service_result.stderr}")
+            else:
+                print(f"Service '{service_file_name}' stopped successfully.")
+
+            print("Sending an image to the Prusa Connect...")
             send_image(rotation, fingerprint, token)
+            print("Image sent successfully.")
             if ask_confirmation(
                     "Is the image visible in Prusa Connect (refresh the page please)? If the image is incorrectly "
                     "rotated, don't worry we will fix that later."
@@ -344,6 +372,7 @@ if __name__ == '__main__':
                       "correct I do recommend to try create an image capture from the Camera via a Shell command "
                       "`rpicam-still`.")
         except Exception as e:
+            print("Ooops! Something went wrong while trying to finalize the installation.")
             print(e)
 
     else:
